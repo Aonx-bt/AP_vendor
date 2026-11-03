@@ -1,3 +1,4 @@
+# AP Desk Supabase config. Deployed by the Supabase GitHub integration (or .github/workflows/deploy-backend.yml).
 project_id = "ap-desk"
 
 [functions.extract-invoice]

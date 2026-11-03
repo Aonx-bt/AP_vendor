@@ -18,6 +18,23 @@ You'll create two free accounts and copy a few values into GitHub. **Never paste
    - **Access token:** your profile picture (bottom left) → **Account preferences** → **Access Tokens** → **Generate new token** → name it `github` → copy it.
 4. Under **Project Settings → API**, note the **Project URL** and the **anon public** key, for Vercel in step 4. These two are safe to put in a website.
 
+## 2a. If you linked Supabase to GitHub (Supabase → Integrations → GitHub)
+
+This replaces steps 2 and 3. Supabase deploys straight from the repo.
+
+1. In Supabase → **Project Settings → Integrations → GitHub**, check:
+   - **Supabase directory:** `.`
+   - **Production branch:** `main`
+   - **Deploy to production:** on
+2. Add your Sarvam key on the Supabase side: **Edge Functions → Secrets** (or Project Settings → Edge Functions) → add `SARVAM_API_KEY`.
+3. After Claude's next change, check:
+   - **Table Editor** lists `bills`, `vendors`, `emails` and the other tables;
+   - **Edge Functions** lists `extract-invoice`, `bill-actions`, `validate-bill` and others (8 in total).
+
+   If the tables are there but the functions aren't, tell Claude: your Supabase plan may not deploy functions from GitHub, and steps 2–3 below do it instead.
+
+Then go to step 4.
+
 ## 2. GitHub secrets (so changes deploy themselves)
 
 Open https://github.com/Aonx-bt/AP_vendor/settings/secrets/actions and click **New repository secret** for each:

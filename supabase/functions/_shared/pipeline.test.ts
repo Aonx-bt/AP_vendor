@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkGstinFormat, gstinCheckChar } from "./gstin.ts";
+import { checkGstinFormat, gstinCheckChar, isOidarRegistration } from "./gstin.ts";
 import { MemoryStore } from "./store.ts";
 import { buildDemo } from "./seed.ts";
 import { SimulatedLLM } from "./llm.ts";
@@ -16,6 +16,10 @@ describe("GSTIN", () => {
     expect(checkGstinFormat("45AAPFU0939F1ZV").problems.some((p) => p.includes("State code"))).toBe(true);
     expect(checkGstinFormat("27AAPF10939F1ZV").problems.some((p) => p.includes("PAN"))).toBe(true);
     expect(checkGstinFormat("27AAPFU0939").ok).toBe(false);
+  });
+  it("recognises overseas online service provider (OIDAR) registrations", () => {
+    expect(isOidarRegistration("9924USA29003OSI")).toBe(true);
+    expect(isOidarRegistration("27AAPFU0939F1ZV")).toBe(false);
   });
 });
 

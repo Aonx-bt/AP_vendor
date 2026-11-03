@@ -1,6 +1,6 @@
 import type { Bill, BillLine, Email, Outcome, PurchaseOrder, ValidationResult, Vendor } from "./types.ts";
 import { COMPANY } from "./types.ts";
-import { checkGstinFormat, STATE_NAMES } from "./gstin.ts";
+import { checkGstinFormat, isOidarRegistration, STATE_NAMES } from "./gstin.ts";
 import { daysBetween, domainOf, inr, num, round2 } from "./util.ts";
 
 export type CheckResult = Pick<ValidationResult, "check_key" | "outcome" | "detail" | "evidence" | "source">;
@@ -65,7 +65,9 @@ export function runChecks(i: CheckInput): CheckResult[] {
 
   // 1. GSTIN format
   if (!gstin) out.push(r("gstin_format", "skipped", "GSTIN not found on the invoice.", { gstin: null }));
-  else {
+  else if (isOidarRegistration(gstin)) {
+    out.push(r("gstin_format", "pass", `${gstin} is a registration for an overseas online service provider (OIDAR). These follow their own format, so the Indian GSTIN checksum does not apply.`, { gstin, kind: "oidar", country: gstin.slice(4, 7) }));
+  } else {
     const g = checkGstinFormat(gstin);
     out.push(
       g.ok
@@ -152,7 +154,10 @@ export function runChecks(i: CheckInput): CheckResult[] {
     const inter = vs ? vs !== COMPANY.state_code : null;
     const hasIgst = num(bill.igst) > 0, hasCs = num(bill.cgst) + num(bill.sgst) > 0;
     const ev = { vendor_state: vs ? STATE_NAMES[vs] : null, buyer_state: COMPANY.state, inter_state: inter, cgst: bill.cgst, sgst: bill.sgst, igst: bill.igst };
-    if (inter == null) out.push(r("tax_split", "skipped", "No vendor GSTIN, so place of supply cannot be determined.", ev));
+    if (isOidarRegistration(gstin)) {
+      if (hasCs) out.push(r("tax_split", "warn", "Overseas supplier: GST on imported services should be IGST, but CGST+SGST is charged.", ev));
+      else out.push(r("tax_split", "pass", hasIgst ? "Overseas supplier: GST charged as IGST, as expected for imported services." : "Overseas supplier: no GST charged.", ev));
+    } else if (inter == null) out.push(r("tax_split", "skipped", "No vendor GSTIN, so place of supply cannot be determined.", ev));
     else if (!hasIgst && !hasCs) out.push(r("tax_split", bill.rcm ? "pass" : "warn", bill.rcm ? "No GST charged (consistent with reverse charge)." : "No GST charged on the invoice.", ev));
     else if (inter && hasCs) out.push(r("tax_split", "warn", `Inter-state supply (${ev.vendor_state} → ${COMPANY.state}) should carry IGST, but CGST+SGST is charged.`, ev));
     else if (!inter && hasIgst) out.push(r("tax_split", "warn", `Intra-state supply within ${COMPANY.state} should carry CGST+SGST, but IGST is charged.`, ev));
@@ -197,7 +202,14 @@ export function runChecks(i: CheckInput): CheckResult[] {
   }
 
   // 10. Reverse charge
-  {
+  if (isOidarRegistration(gstin)) {
+    const charged = num(bill.cgst) + num(bill.sgst) + num(bill.igst) > 0;
+    out.push(
+      charged
+        ? r("rcm_flag", "warn", `Overseas online service provider. A GST-registered company pays GST on imported services itself (reverse charge), so the vendor should not charge it. This invoice charges GST, so it was probably issued without ${COMPANY.name}'s GSTIN. Ask the vendor to add it, or confirm it was meant to be a personal purchase.`, { kind: "oidar", gst_charged: true })
+        : r("rcm_flag", "warn", "Overseas online service provider with no GST charged: self-assess IGST under reverse charge (import of services).", { kind: "oidar", gst_charged: false }),
+    );
+  } else {
     const c = rcmCandidate(lines, vendor, gstin);
     out.push(c ? r("rcm_flag", "warn", `Probable reverse charge: ${c.reason}. Self-assess GST; do not pay GST to the vendor.`, c) : r("rcm_flag", "pass", "Forward charge: GST is payable to the vendor."));
   }

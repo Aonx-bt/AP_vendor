@@ -38,7 +38,7 @@ export const SARVAM_INVOICE_SCHEMA = {
         type: "object",
         properties: {
           description: s("Item or service description."),
-          hsn_sac: s("HSN or SAC code of the line." + NOT_PRINTED),
+          hsn_sac: s("HSN or SAC code of the line. If the invoice prints a single HSN/SAC code elsewhere (for example below the table), use that code." + NOT_PRINTED),
           qty: n("Quantity." + NOT_PRINTED),
           rate: n("Unit rate before GST, in rupees." + NOT_PRINTED),
           gst_pct: n("GST rate percent for the line, e.g. 18." + NOT_PRINTED),
@@ -59,7 +59,10 @@ export const SARVAM_INVOICE_SCHEMA = {
 
 // ------------------------------------------------------------------ value normalisation (in code, not by the model)
 
-const MONTHS: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
+const MONTHS: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
+  january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+};
 const pad = (x: number) => String(x).padStart(2, "0");
 
 export function toIsoDate(v: unknown): string | null {
@@ -79,6 +82,11 @@ export function toIsoDate(v: unknown): string | null {
     const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
     if (mo && +m[1] >= 1 && +m[1] <= 31) return `${y}-${pad(mo)}-${pad(+m[1])}`;
   }
+  m = t.match(/^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/); // "November 2, 2026" (month first)
+  if (m) {
+    const mo = MONTHS[m[1].toLowerCase()] ?? MONTHS[m[1].slice(0, 3).toLowerCase()];
+    if (mo && +m[2] >= 1 && +m[2] <= 31) return `${m[3]}-${pad(mo)}-${pad(+m[2])}`;
+  }
   return null;
 }
 
@@ -95,6 +103,7 @@ const str = (v: unknown): string | null => {
   const t = String(v).trim();
   return t && !/^(n\/?a|null|none|-+)$/i.test(t) ? t : null;
 };
+const RED_FLAG = /\b(approve|approved|ignore|disregard|skip|bypass|override|urgent(ly)? pay|mark (this|it|as)|new (bank|account)|change[sd]? (of |in )?(bank|account)|updated? bank|(ai|assistant|system|automat\w*|prompt|instruction)s?\b)/i;
 const upperNoSpace = (v: unknown) => str(v)?.replace(/\s+/g, "").toUpperCase() ?? null;
 
 function leafConfidence(a: unknown): number | null {
@@ -126,7 +135,9 @@ export function mapSarvamResult(result: Record<string, unknown>, annotations: Re
   f.sgst = toNumber(r.sgst);
   f.igst = toNumber(r.igst);
   f.total = toNumber(r.total);
-  f.suspicious_instructions = str(r.instructions_to_reader);
+  // Sarvam also reports ordinary text like "Pay online"; keep only real red flags.
+  const instr = str(r.instructions_to_reader);
+  f.suspicious_instructions = instr && RED_FLAG.test(instr) ? instr : null;
   const lines = Array.isArray(r.line_items) ? (r.line_items as Record<string, unknown>[]) : [];
   f.line_items = lines
     .map((l) => ({

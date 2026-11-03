@@ -61,5 +61,12 @@ export const STATE_NAMES: Record<string, string> = {
   "18": "Assam", "19": "West Bengal", "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh",
   "24": "Gujarat", "26": "Dadra & Nagar Haveli and Daman & Diu", "27": "Maharashtra", "29": "Karnataka", "30": "Goa",
   "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman & Nicobar",
-  "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh",
+  "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh", "99": "Centre (overseas supplier)",
 };
+
+/** Registration of an overseas online service provider (OIDAR), e.g. 9924USA29003OSI:
+ *  99 (Centre) + 2-digit year + 3-letter country code + 5 digits + "OS" + 1 check character.
+ *  These do not follow the PAN-based GSTIN pattern or its checksum. */
+export function isOidarRegistration(raw: string | null | undefined): boolean {
+  return !!raw && /^99\d{2}[A-Z]{3}\d{5}OS[A-Z0-9]$/.test(raw.trim().toUpperCase());
+}

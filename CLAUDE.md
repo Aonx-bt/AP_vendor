@@ -12,12 +12,13 @@ The owner edits this app only by prompting Claude. After every change:
    not a developer: avoid jargon, keep instructions to clicks.
 
 ## Current work
-See `docs/next-steps.md`. Part A (Sarvam Vision invoice reading + `npm run try-extract`) is built.
-Next: the owner allows `api.sarvam.ai` and `docs.sarvam.ai` in the environment's network settings and
-adds `SARVAM_API_KEY` as an environment variable, then in a new session attaches real invoice PDFs.
-Run `npm run try-extract -- <files> --out <scratchpad>/report.md` (add `--add-vendor` if the vendor is
-unknown), read each PDF yourself and compare it to the report field by field, and tell the owner
-plainly what Sarvam got right or wrong. Never print or commit the key. Then Part B (live site + Gmail).
+See `docs/next-steps.md`. Part A (Sarvam Vision invoice reading) is built and verified live: the owner
+has allowed `api.sarvam.ai`/`docs.sarvam.ai` and set `SARVAM_API_KEY` in the environment.
+To test real invoices the owner attaches: `npm run try-extract -- <files> --out <scratchpad>/report.md`
+(add `--add-vendor` if the vendor is unknown; the npm script already sets NODE_USE_ENV_PROXY=1, which
+Node needs to use this workspace's network proxy). Read each PDF yourself, compare it to the report
+field by field, and tell the owner plainly what Sarvam got right or wrong. Never print or commit the key.
+Then Part B (live site + Gmail).
 
 ## AI engines
 - Invoices: Sarvam Vision if `SARVAM_API_KEY` is set (`_shared/sarvam.ts`), else Claude (`LLM_API_KEY`).

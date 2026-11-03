@@ -11,7 +11,7 @@
     "preview:page": "npm run build:demo && python3 scripts/make-preview.py preview.html",
     "test": "vitest run",
     "gen:seed": "tsx scripts/gen-seed.ts",
-    "try-extract": "tsx scripts/try-extract.ts"
+    "try-extract": "NODE_USE_ENV_PROXY=1 NODE_NO_WARNINGS=1 tsx scripts/try-extract.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",

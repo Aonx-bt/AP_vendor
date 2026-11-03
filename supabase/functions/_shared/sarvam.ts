@@ -155,6 +155,8 @@ export function mapSarvamResult(result: Record<string, unknown>, annotations: Re
       c = cs.length ? Math.min(...cs) : null;
     } else c = leafConfidence(ann[keyMap[k] ?? k]);
     if (c != null) fromSarvam = true;
+    // Sarvam scores a field it found nothing for as 0. An absence is not a doubtful read, so treat it as certain.
+    if (!present && c === 0) c = 1;
     confidence[k] = c ?? (present ? 0.9 : 1);
   }
   return { fields: f, confidence, confidenceSource: fromSarvam ? "sarvam" : "default" };

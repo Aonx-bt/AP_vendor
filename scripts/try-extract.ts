@@ -95,7 +95,10 @@ for (const path of files) {
   ];
   for (const [label, k, v] of rows) {
     const c = conf[k];
-    md += `| ${label} | ${fmt(k, v)} | ${c == null ? "" : `${Math.round(c * 100)}%${c < 0.8 ? " ⚠ check" : ""}`} |\n`;
+    const derived = k === "due_date" && v == null && bill.due_date ? `_not printed; worked out from "${ex.payment_terms}": ${bill.due_date}_` : null;
+    const shown = derived ?? fmt(k, v);
+    const doubtful = c != null && c < 0.8 && (v != null || derived);
+    md += `| ${label} | ${shown} | ${c == null || (v == null && !derived) ? "" : `${Math.round(c * 100)}%`}${doubtful ? " ⚠ check" : ""} |\n`;
   }
   md += `\n### Line items (${ex.line_items.length})\n\n| # | Description | HSN/SAC | Qty | Rate | GST % | Amount excl GST |\n|---|---|---|---|---|---|---|\n`;
   ex.line_items.forEach((l, i) => {

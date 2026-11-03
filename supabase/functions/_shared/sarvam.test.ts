@@ -68,6 +68,11 @@ describe("mapSarvamResult", () => {
     expect(m.confidence.bank_account_last4).toBe(0.62);
     expect(m.confidence.line_items).toBe(0.7);
   });
+  it("does not flag a field as doubtful just because it is absent", () => {
+    const m = mapSarvamResult({ ...result, po_reference: null }, { po_reference: { confidence: 0 }, invoice_no: { confidence: 0.4 } });
+    expect(m.confidence.po_reference).toBe(1);
+    expect(m.confidence.invoice_no).toBe(0.4);
+  });
 });
 
 describe("SarvamExtractor job flow", () => {

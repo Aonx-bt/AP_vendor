@@ -195,7 +195,8 @@ function buildInsights(ctx: Ctx, a: { ex: ReturnType<typeof emptyExtraction>; du
     const age = daysBetween(a.ex.invoice_date, today);
     if (a.due) {
       const left = daysBetween(today, a.due);
-      out.push({ kind: "terms", text: left < 0 ? `Invoice is ${age} days old${a.ex.payment_terms ? ` on ${a.ex.payment_terms} terms` : ""}: ${-left} days overdue.` : `Invoice is ${age} days old; due in ${left} days${a.ex.payment_terms ? ` (${a.ex.payment_terms})` : ""}.` });
+      const d = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
+      out.push({ kind: "terms", text: left < 0 ? `Invoice is ${d(age)} old${a.ex.payment_terms ? ` on ${a.ex.payment_terms} terms` : ""}: ${d(-left)} overdue.` : `Invoice is ${d(age)} old; due in ${d(left)}${a.ex.payment_terms ? ` (${a.ex.payment_terms})` : ""}.` });
     }
   }
   if (a.email && a.vendor?.email_domain && domainOf(a.email.from_address) !== a.vendor.email_domain)

@@ -1,0 +1,18 @@
+project_id = "ap-desk"
+
+[functions.extract-invoice]
+verify_jwt = false
+[functions.validate-bill]
+verify_jwt = false
+[functions.approval-action]
+verify_jwt = false
+[functions.vendor-followup]
+verify_jwt = false
+[functions.process-email]
+verify_jwt = false
+[functions.sync-gmail]
+verify_jwt = false
+[functions.reset-demo]
+verify_jwt = false
+[functions.bill-actions]
+verify_jwt = false

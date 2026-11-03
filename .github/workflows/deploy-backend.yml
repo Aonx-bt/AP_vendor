@@ -23,7 +23,7 @@ jobs:
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # If the Supabase GitHub integration deploys this repo instead, these secrets are left unset and
       # this workflow steps aside (green, with a note) rather than failing on every push.
@@ -48,7 +48,7 @@ jobs:
 
       - name: Apply database changes
         if: steps.cfg.outputs.run == 'true'
-        run: supabase db push --password "$SUPABASE_DB_PASSWORD"
+        run: supabase db push --remote --password "$SUPABASE_DB_PASSWORD"
 
       - name: Set server secrets
         if: steps.cfg.outputs.run == 'true'

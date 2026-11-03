@@ -8,6 +8,9 @@ The owner edits this app only by prompting Claude. After every change:
    https://claude.ai/artifact/14D6z3wvwTVzTwq9WArZ1n
    (Artifact tool: publish `preview.html` with `url` set to that link.)
 4. Commit and push to `main` on GitHub (Aonx-bt/AP_vendor) with a short plain-English message.
+   Pushes also redeploy the LIVE site once the owner has done SETUP.md: Vercel rebuilds the website,
+   and `.github/workflows/deploy-backend.yml` redeploys Supabase when `supabase/**` changes. If the owner
+   says the live site didn't update, ask them to check Actions → Deploy backend for a red cross.
 5. Tell the owner in plain language what changed and to refresh the preview link. The owner is
    not a developer: avoid jargon, keep instructions to clicks.
 

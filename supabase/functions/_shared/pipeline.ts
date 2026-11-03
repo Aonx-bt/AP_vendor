@@ -330,6 +330,24 @@ export async function approvalAction(ctx: Ctx, p: { approvalId: string; action: 
   return setStatus(ctx, bill, "needs_review");
 }
 
+/** Add the invoice's vendor to the vendor master (bank unverified), attach the bill and re-validate. */
+export async function createVendorFromBill(ctx: Ctx, billId: string, actor: string) {
+  const bill = (await ctx.store.get("bills", billId))!;
+  if (bill.vendor_id) throw new Error("This bill already has a vendor.");
+  const name = bill.extracted?.vendor_name?.trim();
+  if (!name) throw new Error("The invoice has no vendor name to create a vendor from.");
+  const email = bill.source_email_id ? await ctx.store.get("emails", bill.source_email_id) : null;
+  const vendor = await ctx.store.insert("vendors", {
+    name, gstin: bill.vendor_gstin, gstin_status: bill.vendor_gstin ? "active" : "not_found", msme_status: null, udyam_no: null,
+    bank_name: null, bank_last4: bill.bank_last4, ifsc: bill.ifsc, bank_verified: false,
+    email_domain: email ? domainOf(email.from_address) : null, tds_section: null, fy_taxable_total: 0,
+    contact_email: email?.from_address ?? null, created_at: ctx.now().toISOString(),
+  } as Partial<Vendor>);
+  await ctx.store.update("bills", billId, { vendor_id: vendor.id });
+  await trace(ctx, billId, actor, "Added new vendor", `Created ${name} in the vendor master from this invoice. GSTIN status is taken as active and bank details are unverified until someone confirms them.`, { vendor_id: vendor.id, gstin: bill.vendor_gstin });
+  return runValidation(ctx, billId, actor);
+}
+
 export async function markPaid(ctx: Ctx, billId: string, actor: string) {
   const bill = (await ctx.store.get("bills", billId))!;
   if (bill.status !== "approved") throw new Error("Only approved bills can be marked paid.");

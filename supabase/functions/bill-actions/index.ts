@@ -1,6 +1,6 @@
 // Bill operations from the drawer and the upload dialog.
 import { serve } from "../_shared/deno.ts";
-import { createBillFromFile, markPaid, resetBill, runExtraction, saveBillEdits, sendToApprovalOverride } from "../_shared/pipeline.ts";
+import { createBillFromFile, createVendorFromBill, markPaid, resetBill, runExtraction, saveBillEdits, sendToApprovalOverride } from "../_shared/pipeline.ts";
 import { fromBase64 } from "../_shared/util.ts";
 import type { Bill, BillLine } from "../_shared/types.ts";
 
@@ -20,6 +20,8 @@ serve(async (body, ctx) => {
       return { bill: await resetBill(ctx, id, actor) };
     case "override":
       return { bill: await sendToApprovalOverride(ctx, id, actor, String(body.comment ?? "")) };
+    case "new_vendor":
+      return { bill: await createVendorFromBill(ctx, id, actor) };
     case "paid":
       return { bill: await markPaid(ctx, id, actor) };
     default:

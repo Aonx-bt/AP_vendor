@@ -132,3 +132,28 @@ describe("intake", () => {
     expect(store.db.bills.length).toBe(n);
   });
 });
+
+describe("unknown vendors", () => {
+  it("adds a vendor from the invoice and re-runs the checks", async () => {
+    const { store, ctx } = await demo();
+    const { createVendorFromBill, runExtraction, createBillFromFile } = await import("./pipeline.ts");
+    const { renderInvoicePdf } = await import("./pdf.ts");
+    const bytes = renderInvoicePdf({
+      vendor: { name: "Malabar Spice Traders", address: "Kochi", gstin: "32AAFCM1234K1Z" + "", pan: "AAFCM1234K" },
+      buyer: { name: "Kaveri Polymers Pvt Ltd", address: "Pune", gstin: "27AAHCK4821M1Z7" },
+      invoice_no: "MST/77", invoice_date: "2026-11-01", due_date: "2026-12-01", bank: { name: "Federal Bank", account: "11110000012345", ifsc: "FDRL0001111" },
+      igst: 1800, lines: [{ description: "Cardamom 1kg", hsn_sac: "09083120", qty: 5, rate: 2000, gst_pct: 18 }],
+    });
+    const b0 = await createBillFromFile(ctx, { bytes, mime: "application/pdf", name: "mst.pdf", department: "Admin" });
+    const b1 = await runExtraction(ctx, b0.id);
+    expect(b1.vendor_id).toBeNull();
+    const b2 = await createVendorFromBill(ctx, b0.id, "Priya Nair");
+    const v = store.db.vendors.find((x) => x.name === "Malabar Spice Traders")!;
+    expect(b2.vendor_id).toBe(v.id);
+    expect(v.bank_verified).toBe(false);
+    expect(v.bank_last4).toBe("2345");
+    expect(store.db.validation_results.find((r) => r.bill_id === b0.id && r.check_key === "bank_details")!.outcome).toBe("warn");
+    await expect(createVendorFromBill(ctx, b0.id, "Priya Nair")).rejects.toThrow(/already has a vendor/);
+  });
+});
+

@@ -33,6 +33,8 @@ In the live app, set the `SARVAM_API_KEY` secret and the Edge Functions use Sarv
 
 ## Connect Supabase
 
+**Putting it online the easy way:** follow [SETUP.md](SETUP.md). It needs no terminal; GitHub Actions deploys the backend and Vercel hosts the site. The commands below are the manual equivalent.
+
 ```bash
 npx supabase link --project-ref <ref>
 npx supabase db push                       # schema, vendor_ledger view, open RLS, storage bucket, Gmail cron

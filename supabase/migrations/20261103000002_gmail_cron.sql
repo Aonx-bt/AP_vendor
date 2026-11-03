@@ -16,6 +16,8 @@ select cron.schedule(
       'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'anon_key')
     ),
     body := '{"trigger":"cron"}'::jsonb
-  );
+  )
+  -- do nothing until the Vault secrets exist (Gmail is set up later)
+  where exists (select 1 from vault.decrypted_secrets where name = 'project_url');
   $$
 );

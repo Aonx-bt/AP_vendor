@@ -163,6 +163,23 @@ function Mailbox() {
   const { db, backend, refresh } = useData();
   const openBill = useOpenBill();
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [typed, setTyped] = useState("");
+  const live = backend.mode === "supabase";
+  const doReset = async () => {
+    setConfirmReset(false);
+    setTyped("");
+    setBusy("reset");
+    try {
+      await backend.resetDemo();
+      await refresh();
+      toast.success("Demo data rebuilt");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
   const [sync, setSync] = useState<{ connected: boolean; message?: string; recorded?: number; processed?: number; at: string } | null>(null);
   if (!db) return null;
   const emails = [...db.emails].sort((a, b) => b.received_at.localeCompare(a.received_at));
@@ -263,12 +280,34 @@ function Mailbox() {
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex gap-3">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-100"><Database className="h-4 w-4" /></div>
-          <div><div className="font-medium">Demo data</div><div className="text-xs text-muted-foreground">Rebuild vendors, POs, rules, 12 bills and the sample inbox. Deletes everything else.</div></div>
+          <div><div className="font-medium">Demo data</div><div className="text-xs text-muted-foreground">Load the sample vendors, POs, approval rules, 12 bills and sample inbox. Deletes everything else.</div></div>
         </div>
-        <Button variant="outline" disabled={busy === "reset"} onClick={async () => { setBusy("reset"); try { await backend.resetDemo(); await refresh(); toast.success("Demo data rebuilt"); } catch (e) { toast.error((e as Error).message); } finally { setBusy(null); } }}>
+        <Button variant="outline" disabled={busy === "reset"} onClick={() => setConfirmReset(true)}>
           {busy === "reset" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Reset demo data
         </Button>
       </Card>
+      <Dialog open={confirmReset} onOpenChange={(o) => { setConfirmReset(o); setTyped(""); }}>
+        <DialogContent>
+          <DialogTitle>Reset all data?</DialogTitle>
+          <DialogDescription>
+            {live
+              ? "This permanently deletes every bill, uploaded invoice, email, vendor and approval rule on this live site, including real invoices, and loads the sample data instead. It cannot be undone."
+              : "This replaces everything in this browser with the original sample data."}
+          </DialogDescription>
+          {live && (
+            <div className="mt-3 space-y-1">
+              <Label htmlFor="confirm-reset">Type DELETE to confirm</Label>
+              <Input id="confirm-reset" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+            </div>
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirmReset(false)}>Cancel</Button>
+            <Button variant={live ? "destructive" : "default"} disabled={live && typed !== "DELETE"} onClick={doReset}>
+              {live ? "Delete everything and reset" : "Reset"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

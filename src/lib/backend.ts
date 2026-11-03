@@ -24,6 +24,7 @@ export interface Backend {
   resetBill(billId: string, actor: string): Promise<void>;
   override(billId: string, actor: string, comment: string): Promise<void>;
   markPaid(billId: string, actor: string): Promise<void>;
+  createVendorFromBill(billId: string, actor: string): Promise<void>;
   approval(approvalId: string, action: P.ApprovalActionKind, actor: string, comment: string): Promise<void>;
   draftVendorEmail(billId: string, actor: string): Promise<VendorMessage>;
   sendVendorEmail(messageId: string, edits: { to_address: string; subject: string; body: string }, actor: string): Promise<{ simulated: boolean }>;
@@ -126,6 +127,7 @@ export function createDemoBackend(): Backend {
     resetBill: (id, actor) => run((c) => P.resetBill(c, id, actor)).then(() => {}),
     override: (id, actor, comment) => run((c) => P.sendToApprovalOverride(c, id, actor, comment)).then(() => {}),
     markPaid: (id, actor) => run((c) => P.markPaid(c, id, actor)).then(() => {}),
+    createVendorFromBill: (id, actor) => run((c) => P.createVendorFromBill(c, id, actor)).then(() => {}),
     approval: (approvalId, action, actor, comment) => run((c) => P.approvalAction(c, { approvalId, action, actor, comment })).then(() => {}),
     draftVendorEmail: (id, actor) => run(async (c) => { await sleep(700); return P.draftVendorEmail(c, id, actor); }),
     sendVendorEmail: (mid, edits, actor) => run((c) => P.sendVendorMessage(c, mid, edits, actor)).then((r) => ({ simulated: r.simulated })),
@@ -193,6 +195,7 @@ export function createSupabaseBackend(url: string, anon: string): Backend {
     resetBill: (bill_id, actor) => fn("bill-actions", { op: "reset", bill_id, actor }).then(() => {}),
     override: (bill_id, actor, comment) => fn("bill-actions", { op: "override", bill_id, actor, comment }).then(() => {}),
     markPaid: (bill_id, actor) => fn("bill-actions", { op: "paid", bill_id, actor }).then(() => {}),
+    createVendorFromBill: (bill_id, actor) => fn("bill-actions", { op: "new_vendor", bill_id, actor }).then(() => {}),
     approval: (approval_id, action, actor, comment) => fn("approval-action", { approval_id, action, actor, comment }).then(() => {}),
     draftVendorEmail: (bill_id, actor) => fn<{ message: VendorMessage }>("vendor-followup", { op: "draft", bill_id, actor }).then((r) => r.message),
     sendVendorEmail: (message_id, edits, actor) => fn<{ simulated: boolean }>("vendor-followup", { op: "send", message_id, edits, actor }),

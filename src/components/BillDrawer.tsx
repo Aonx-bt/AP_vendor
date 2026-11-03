@@ -205,7 +205,16 @@ function DrawerBody({ bill, onClose }: { bill: Bill; onClose: () => void }) {
                         <option value="">Not matched: pick a vendor</option>
                         {db!.vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                       </NativeSelect>
-                      {!form.vendor_id && bill.extracted?.vendor_name && <div className="text-[11px] text-muted-foreground">Invoice says "{bill.extracted.vendor_name}"</div>}
+                      {!form.vendor_id && bill.extracted?.vendor_name && (
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                          Invoice says "{bill.extracted.vendor_name}"
+                          {editable && !bill.vendor_id && (
+                            <Button size="sm" variant="soft" className="h-6 px-2 text-[11px]" disabled={!!busy} onClick={() => run("vendor", () => backend.createVendorFromBill(bill.id, person), `Added ${bill.extracted!.vendor_name} as a vendor`)}>
+                              Add as new vendor
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {field("vendor_gstin", "GSTIN on invoice", "text", true)}
                     {field("bank_last4", "Bank a/c (last 4) on invoice")}

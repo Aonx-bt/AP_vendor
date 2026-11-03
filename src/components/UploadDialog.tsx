@@ -26,6 +26,10 @@ export function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       toast.error(`${f.name} is ${f.type || "an unknown type"}. Upload a PDF, PNG or JPG.`);
       return;
     }
+    if (f.size > 10 * 1024 * 1024) {
+      toast.error(`${f.name} is ${(f.size / 1024 / 1024).toFixed(1)} MB. Upload a file under 10 MB.`);
+      return;
+    }
     setFile(f);
   };
 

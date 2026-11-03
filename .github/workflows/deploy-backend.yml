@@ -48,7 +48,7 @@ jobs:
 
       - name: Apply database changes
         if: steps.cfg.outputs.run == 'true'
-        run: supabase db push --remote --password "$SUPABASE_DB_PASSWORD"
+        run: supabase db push --remote --yes --password "$SUPABASE_DB_PASSWORD"
 
       - name: Set server secrets
         if: steps.cfg.outputs.run == 'true'
@@ -65,11 +65,11 @@ jobs:
             [ -n "$value" ] && args+=("$name=$value")
           done
           if [ ${#args[@]} -gt 0 ]; then
-            supabase secrets set --project-ref "$PROJECT_REF" "${args[@]}"
+            supabase secrets set --yes --project-ref "$PROJECT_REF" "${args[@]}"
           else
             echo "No optional secrets set; the app reads invoices with the simulated engine until SARVAM_API_KEY is added."
           fi
 
       - name: Deploy server functions
         if: steps.cfg.outputs.run == 'true'
-        run: supabase functions deploy --project-ref "$PROJECT_REF" --use-api
+        run: supabase functions deploy --yes --project-ref "$PROJECT_REF" --use-api

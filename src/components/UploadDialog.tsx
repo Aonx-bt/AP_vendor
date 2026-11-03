@@ -89,7 +89,7 @@ export function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             </div>
             {backend.mode === "demo" && (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Demo mode reads only text PDFs made by AP Desk (the sample inbox has some). Other files go to Needs Review. Connect Supabase and set LLM_API_KEY to read any invoice.
+                Demo mode reads only text PDFs made by AP Desk (the sample inbox has some). Other files go to Needs Review. The live version reads real invoices with Sarvam Vision.
               </p>
             )}
             <div className="flex justify-end gap-2">

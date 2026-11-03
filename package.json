@@ -10,7 +10,8 @@
     "build:demo": "vite build --mode artifact --outDir dist-demo",
     "preview:page": "npm run build:demo && python3 scripts/make-preview.py preview.html",
     "test": "vitest run",
-    "gen:seed": "tsx scripts/gen-seed.ts"
+    "gen:seed": "tsx scripts/gen-seed.ts",
+    "try-extract": "tsx scripts/try-extract.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",

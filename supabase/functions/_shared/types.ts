@@ -236,6 +236,8 @@ export interface ExtractionResult {
   fields: Extraction;
   confidence: Record<string, number>;
   engine: string;
+  /** Engine-specific facts for the audit trail (job id, timing, raw output). */
+  details?: Record<string, unknown>;
 }
 
 export interface Tables {

@@ -11,6 +11,19 @@ The owner edits this app only by prompting Claude. After every change:
 5. Tell the owner in plain language what changed and to refresh the preview link. The owner is
    not a developer: avoid jargon, keep instructions to clicks.
 
+## Current work
+See `docs/next-steps.md`. Part A (Sarvam Vision invoice reading + `npm run try-extract`) is built.
+Next: the owner allows `api.sarvam.ai` and `docs.sarvam.ai` in the environment's network settings and
+adds `SARVAM_API_KEY` as an environment variable, then in a new session attaches real invoice PDFs.
+Run `npm run try-extract -- <files> --out <scratchpad>/report.md` (add `--add-vendor` if the vendor is
+unknown), read each PDF yourself and compare it to the report field by field, and tell the owner
+plainly what Sarvam got right or wrong. Never print or commit the key. Then Part B (live site + Gmail).
+
+## AI engines
+- Invoices: Sarvam Vision if `SARVAM_API_KEY` is set (`_shared/sarvam.ts`), else Claude (`LLM_API_KEY`).
+- Email sorting and vendor-email drafts: Claude if `LLM_API_KEY` is set, else simulated.
+- Without keys (demo/preview), everything is simulated (`SimulatedLLM` in `_shared/llm.ts`).
+
 ## Layout
 - `supabase/functions/_shared/` holds all business logic (agents, checks, GSTIN, LLM, seed). It is
   shared by the browser demo and the Supabase Edge Functions, so change logic there, once.

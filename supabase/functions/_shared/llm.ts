@@ -131,11 +131,11 @@ export class SimulatedLLM implements LLM {
     const f = emptyExtraction();
     const conf: Record<string, number> = Object.fromEntries(EXTRACTION_FIELDS.map((k) => [k, 1]));
     if (doc.mime !== "application/pdf") {
-      throw new Error("Demo mode reads only the sample PDFs. Connect Supabase and set LLM_API_KEY to read images and other PDFs.");
+      throw new Error("Demo mode reads only the sample PDFs. Connect Supabase and set SARVAM_API_KEY (or LLM_API_KEY) to read real invoices.");
     }
     const rows = readPdfRows(doc.bytes);
     if (rows.length < 3) {
-      throw new Error("Demo mode could not find readable text in this PDF. Connect Supabase and set LLM_API_KEY to use the real AP agent.");
+      throw new Error("Demo mode could not find readable text in this PDF. Connect Supabase and set SARVAM_API_KEY (or LLM_API_KEY) to read real invoices.");
     }
     const cells = rows.flat();
     const get = (label: string) => {
@@ -210,5 +210,22 @@ export class SimulatedLLM implements LLM {
       d.issues.map((x, i) => `${i + 1}. ${x}`).join("\n") +
       `\n\nPlease reply to this email with a corrected invoice or the missing details.\n\nRegards,\nAccounts Payable Team\n${d.company}`;
     return { subject, body };
+  }
+}
+
+/** One engine reads invoices, another sorts emails and drafts vendor emails. */
+export class CompositeLLM implements LLM {
+  name: string;
+  constructor(private extractor: Pick<LLM, "extractInvoice" | "name">, private rest: LLM) {
+    this.name = extractor.name;
+  }
+  extractInvoice(doc: DocInput) {
+    return this.extractor.extractInvoice(doc);
+  }
+  classifyEmail(e: EmailForClassification) {
+    return this.rest.classifyEmail(e);
+  }
+  draftVendorEmail(d: DraftInput) {
+    return this.rest.draftVendorEmail(d);
   }
 }

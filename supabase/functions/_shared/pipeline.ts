@@ -115,7 +115,7 @@ export async function runExtraction(ctx: Ctx, billId: string): Promise<Bill> {
   const conf = { ...result.confidence };
   const found = Object.entries(ex).filter(([k, v]) => k !== "line_items" && k !== "suspicious_instructions" && v != null).length;
   const low = Object.entries(conf).filter(([, c]) => c < 0.8).map(([k]) => k);
-  await trace(ctx, billId, "ap_agent", "Extracted invoice fields", `Read ${found} header fields and ${ex.line_items.length} line item${ex.line_items.length === 1 ? "" : "s"}${low.length ? `; low confidence on ${low.join(", ")}` : ""}.`, { engine: result.engine, fields: ex, confidence: conf });
+  await trace(ctx, billId, "ap_agent", "Extracted invoice fields", `Read ${found} header fields and ${ex.line_items.length} line item${ex.line_items.length === 1 ? "" : "s"}${low.length ? `; low confidence on ${low.join(", ")}` : ""}.`, { engine: result.engine, fields: ex, confidence: conf, ...(result.details ? { engine_details: result.details } : {}) });
 
   if (ex.suspicious_instructions) {
     await trace(ctx, billId, "ap_agent", "Ignored instructions in document", "The document contains text addressed to an automated system. It was treated as data and not followed.", { text: ex.suspicious_instructions });

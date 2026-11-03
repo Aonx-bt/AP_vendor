@@ -135,10 +135,13 @@ export function runChecks(i: CheckInput): CheckResult[] {
     const gstFromLines = round2(lines.reduce((s, l) => s + (num(l.amount_excl_gst) * num(l.gst_pct)) / 100, 0));
     const tax = round2(num(bill.cgst) + num(bill.sgst) + num(bill.igst));
     const expectedTotal = round2(num(bill.subtotal) - num(bill.discount) + tax + num(bill.adjustments));
-    if (bill.subtotal != null && Math.abs(lineSum - bill.subtotal) > 1) problems.push(`Lines add up to ${inr(lineSum)}, subtotal shows ${inr(bill.subtotal)}`);
-    if (!bill.rcm && Math.abs(gstFromLines - tax) > 1) problems.push(`GST at line rates is ${inr(gstFromLines)}, invoice charges ${inr(tax)}`);
+    // compare only what the invoice actually prints: skip a comparison when lines lack amounts or GST rates
+    const amountsKnown = lines.length > 0 && lines.every((l) => l.amount_excl_gst != null);
+    const ratesKnown = amountsKnown && lines.every((l) => l.gst_pct != null);
+    if (amountsKnown && bill.subtotal != null && Math.abs(lineSum - bill.subtotal) > 1) problems.push(`Lines add up to ${inr(lineSum)}, subtotal shows ${inr(bill.subtotal)}`);
+    if (ratesKnown && !bill.rcm && Math.abs(gstFromLines - tax) > 1) problems.push(`GST at line rates is ${inr(gstFromLines)}, invoice charges ${inr(tax)}`);
     if (bill.total != null && Math.abs(expectedTotal - bill.total) > 1) problems.push(`Subtotal + GST = ${inr(expectedTotal)}, total shows ${inr(bill.total)}`);
-    const ev = { line_sum: lineSum, gst_from_lines: gstFromLines, tax_charged: tax, expected_total: expectedTotal, invoice_total: bill.total };
+    const ev = { line_sum: amountsKnown ? lineSum : null, gst_from_lines: ratesKnown ? gstFromLines : null, tax_charged: tax, expected_total: expectedTotal, invoice_total: bill.total };
     if (bill.total == null || bill.subtotal == null) out.push(r("math_check", "skipped", "Subtotal or total missing; cannot reconcile.", ev));
     else out.push(problems.length ? r("math_check", "fail", problems[0] + ".", { ...ev, problems }) : r("math_check", "pass", `Lines, GST and total reconcile within ₹1 (${inr(bill.total)}).`, ev));
   }

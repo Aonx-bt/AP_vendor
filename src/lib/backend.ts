@@ -5,6 +5,7 @@ import { SimulatedLLM } from "@shared/llm.ts";
 import { buildDemo } from "@shared/seed.ts";
 import * as P from "@shared/pipeline.ts";
 import { fromBase64, toBase64 } from "@shared/util.ts";
+import { supabaseOrigin } from "./supabaseUrl";
 
 export interface LedgerRow {
   vendor_id: string;
@@ -214,5 +215,5 @@ export function createSupabaseBackend(url: string, anon: string): Backend {
 export function createBackend(): Backend {
   const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-  return url && anon ? createSupabaseBackend(url, anon) : createDemoBackend();
+  return url && anon ? createSupabaseBackend(supabaseOrigin(url), anon.trim()) : createDemoBackend();
 }

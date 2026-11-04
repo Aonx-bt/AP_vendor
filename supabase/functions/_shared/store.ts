@@ -22,7 +22,7 @@ export interface Store {
 export type DB = { [K in TableName]: Tables[K][] };
 export const emptyDB = (): DB => ({
   vendors: [], purchase_orders: [], bills: [], bill_lines: [], validation_results: [], approval_rules: [],
-  approvals: [], trace_events: [], emails: [], vendor_messages: [],
+  approvals: [], trace_events: [], emails: [], vendor_messages: [], extraction_runs: [],
 });
 
 const matches = (row: Record<string, unknown>, match?: Record<string, unknown>) =>

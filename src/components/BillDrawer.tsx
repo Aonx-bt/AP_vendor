@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BadgeCheck, CheckCircle2, Loader2, Mail, MailCheck, RefreshCw, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import * as D from "@radix-ui/react-dialog";
@@ -10,6 +10,7 @@ import { Card, SectionTitle } from "./ui/card";
 import { StatusChip } from "./bits";
 import { DocViewer } from "./DocViewer";
 import { VendorEmailModal } from "./VendorEmailModal";
+import { RunProgress, useRunProgress } from "./RunProgress";
 import { ApprovalCard, AuditTrail, DecisionCard, Insights, LineItems, PaymentSummary, Stepper, Verification, type LineDraft, type Money } from "./billParts";
 import { useData } from "@/lib/data";
 import { cn, longDate, timeOf } from "@/lib/utils";
@@ -148,7 +149,7 @@ function DrawerBody({ bill, onClose }: { bill: Bill; onClose: () => void }) {
         <TabsContent value="details" className="-mx-6 h-[calc(100vh-112px)] overflow-y-auto bg-white scroll-thin">
           <div className="space-y-4 px-6 py-5">
             {reading ? (
-              <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-sm"><Loader2 className="h-5 w-5 animate-spin text-emerald-600" /><div><div className="font-medium">Reading invoice…</div><div className="text-xs text-muted-foreground">The AP agent is extracting fields. Checks run automatically next.</div></div></div>
+<LiveRun billId={bill.id} fileName={bill.file_name} />
             ) : (
               <DecisionCard bill={bill} results={results} approvals={approvals} rule={rule} traces={traces} />
             )}
@@ -307,4 +308,16 @@ function ConfirmReset({ open, onOpenChange, onConfirm }: { open: boolean; onOpen
       </DialogContent>
     </Dialog>
   );
+}
+
+/** While a bill is being read, show its stages live and refresh the drawer when the run ends. */
+function LiveRun({ billId, fileName }: { billId: string; fileName: string | null }) {
+  const { refresh } = useData();
+  const p = useRunProgress(billId, true);
+  const latest = p.runs[p.runs.length - 1];
+  const finished = !!latest && latest.status !== "running";
+  useEffect(() => {
+    if (finished) refresh();
+  }, [finished, refresh]);
+  return <RunProgress traces={p.traces} runs={p.runs} fileName={fileName} live />;
 }

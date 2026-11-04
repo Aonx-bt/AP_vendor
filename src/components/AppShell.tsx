@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink, useLocation, useSearchParams } from "react-router-dom";
-import { Building2, ChevronDown, FileText, Home, Loader2, Settings, Sparkles } from "lucide-react";
+import { Activity, Building2, ChevronDown, FileText, Home, Loader2, Settings, Sparkles } from "lucide-react";
 import { Tip } from "./ui/tooltip";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from "./ui/menu";
 import { useData } from "@/lib/data";
@@ -11,10 +11,11 @@ import { BillDrawer } from "./BillDrawer";
 const NAV = [
   { to: "/", label: "Home", icon: Home },
   { to: "/bills", label: "Bills", icon: FileText },
+  { to: "/runs", label: "Runs", icon: Activity },
   { to: "/vendors", label: "Vendors", icon: Building2 },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
-const TITLES: Record<string, string> = { "/": "Home", "/bills": "Bills", "/vendors": "Vendors", "/settings": "Settings" };
+const TITLES: Record<string, string> = { "/": "Home", "/bills": "Bills", "/runs": "Runs", "/vendors": "Vendors", "/settings": "Settings" };
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { role, setRole, person, backend, loading, error, db } = useData();

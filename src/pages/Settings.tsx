@@ -283,7 +283,7 @@ function Mailbox() {
           <div><div className="font-medium">Demo data</div><div className="text-xs text-muted-foreground">Load the sample vendors, POs, approval rules, 12 bills and sample inbox. Deletes everything else.</div></div>
         </div>
         <Button variant="outline" disabled={busy === "reset"} onClick={() => setConfirmReset(true)}>
-          {busy === "reset" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Reset demo data
+          {busy === "reset" ? <Loader2 className="animate-spin" /> : <RefreshCw />} {busy === "reset" ? (live ? "Resetting… about a minute" : "Resetting…") : "Reset demo data"}
         </Button>
       </Card>
       <Dialog open={confirmReset} onOpenChange={(o) => { setConfirmReset(o); setTyped(""); }}>

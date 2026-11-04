@@ -5,7 +5,7 @@ import { buildDemo } from "../_shared/seed.ts";
 serve(async (_body, ctx) => {
   // deno-lint-ignore no-explicit-any
   const sb = (ctx.store as any).sb;
-  for (const t of ["trace_events", "vendor_messages", "approvals", "validation_results", "bill_lines", "bills", "emails", "approval_rules", "purchase_orders", "vendors"]) {
+  for (const t of ["extraction_runs", "trace_events", "vendor_messages", "approvals", "validation_results", "bill_lines", "bills", "emails", "approval_rules", "purchase_orders", "vendors"]) {
     const { error } = await sb.from(t).delete().not("id", "is", null);
     if (error) throw new Error(`${t}: ${error.message}`);
   }

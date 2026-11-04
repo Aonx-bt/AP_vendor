@@ -8,6 +8,13 @@ serve(async (body, ctx) => {
   const actor = String(body.actor ?? "user");
   const id = String(body.bill_id ?? "");
   switch (body.op) {
+    case "create": {
+      // create only; the browser then calls extract-invoice and watches the run's progress
+      const bill = await createBillFromFile(ctx, {
+        bytes: fromBase64(String(body.data)), mime: String(body.mime), name: String(body.name), department: (body.department as string) || null, actor,
+      });
+      return { bill };
+    }
     case "upload": {
       const bill = await createBillFromFile(ctx, {
         bytes: fromBase64(String(body.data)), mime: String(body.mime), name: String(body.name), department: (body.department as string) || null, actor,

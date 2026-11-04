@@ -198,6 +198,27 @@ export interface VendorMessage {
   created_at: string;
 }
 
+export type RunSource = "upload" | "email" | "reset" | "seed";
+/** One pass of the AP agent over a bill's document, from reading to routing. */
+export interface ExtractionRun {
+  id: string;
+  bill_id: string;
+  email_id: string | null;
+  source: RunSource;
+  file_name: string | null;
+  engine: string | null;
+  status: "running" | "succeeded" | "failed";
+  outcome: BillStatus | null;
+  error: string | null;
+  started_at: string;
+  read_started_at: string | null;
+  read_finished_at: string | null;
+  finished_at: string | null;
+  fields_found: number | null;
+  low_confidence: string[];
+  details: Record<string, unknown>;
+}
+
 export interface Insight {
   kind: "terms" | "rcm" | "amount" | "sender" | "injection" | "msme" | "info";
   text: string;
@@ -251,6 +272,7 @@ export interface Tables {
   trace_events: TraceEvent;
   emails: Email;
   vendor_messages: VendorMessage;
+  extraction_runs: ExtractionRun;
 }
 export type TableName = keyof Tables;
 

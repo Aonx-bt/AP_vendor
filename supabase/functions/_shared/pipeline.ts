@@ -1,6 +1,6 @@
 // The agents. Every function takes a Ctx so the same code runs in the browser (demo mode)
 // and in Supabase Edge Functions. Every decision writes a trace_events row with its reasoning.
-import type { Approval, ApprovalRule, Bill, BillLine, Condition, Email, EmailAttachment, Insight, Role, TraceEvent, Vendor, VendorMessage } from "./types.ts";
+import type { Approval, ApprovalRule, Bill, BillLine, Condition, Email, EmailAttachment, ExtractionRun, Insight, Role, RunSource, TraceEvent, Vendor, VendorMessage } from "./types.ts";
 import { COMPANY, PEOPLE, ROLE_LABEL } from "./types.ts";
 import type { Store } from "./store.ts";
 import type { LLM } from "./llm.ts";
@@ -19,6 +19,10 @@ export interface Ctx {
   llm: LLM;
   now: () => Date;
   mailer?: Mailer;
+  /** Demo only: pause this many ms after each trace step so the live progress view visibly ticks. */
+  pace?: number;
+  /** Overrides the recorded source of extraction runs (the demo seed uses "seed"). */
+  runSource?: RunSource;
 }
 
 export const SUPPORTED_MIME = ["application/pdf", "image/png", "image/jpeg"];
@@ -27,6 +31,7 @@ export const SUPPORTED_MIME = ["application/pdf", "image/png", "image/jpeg"];
 
 export async function trace(ctx: Ctx, bill_id: string | null, actor: string, action: string, reasoning: string, evidence: Record<string, unknown> = {}, email_id: string | null = null) {
   await ctx.store.insert("trace_events", { bill_id, email_id, actor, action, reasoning, evidence, ts: ctx.now().toISOString() } as Partial<TraceEvent>);
+  if (ctx.pace) await new Promise((r) => setTimeout(r, ctx.pace));
 }
 
 async function setStatus(ctx: Ctx, bill: Bill, status: Bill["status"]) {
@@ -85,11 +90,39 @@ export async function createBillFromFile(
 
 // ------------------------------------------------------------------ Agent 1: AP agent
 
-export async function runExtraction(ctx: Ctx, billId: string): Promise<Bill> {
+export function engineLabel(engine: string | null | undefined): string {
+  if (!engine) return "the AP agent";
+  if (engine.startsWith("sarvam")) return "Sarvam Vision";
+  if (engine.startsWith("claude")) return "Claude";
+  if (engine === "simulated") return "the demo reader";
+  return engine;
+}
+
+/** Read the bill's document, then validate and route it. Records one extraction_runs row for the pass. */
+export async function runExtraction(ctx: Ctx, billId: string, source?: RunSource): Promise<Bill> {
+  const b0 = (await ctx.store.get("bills", billId))!;
+  const run = await ctx.store.insert("extraction_runs", {
+    bill_id: billId, email_id: b0.source_email_id, source: ctx.runSource ?? source ?? (b0.source_email_id ? "email" : "upload"),
+    file_name: b0.file_name, engine: ctx.llm.name, status: "running", outcome: null, error: null, started_at: ctx.now().toISOString(),
+    read_started_at: null, read_finished_at: null, finished_at: null, fields_found: null, low_confidence: [], details: {},
+  } as Partial<ExtractionRun>);
+  try {
+    const out = await extractAndRoute(ctx, billId, run.id);
+    const current = await ctx.store.get("extraction_runs", run.id);
+    if (current?.status === "running") await ctx.store.update("extraction_runs", run.id, { status: "succeeded", outcome: out.status, finished_at: ctx.now().toISOString() });
+    return out;
+  } catch (e) {
+    await ctx.store.update("extraction_runs", run.id, { status: "failed", error: (e as Error).message, finished_at: ctx.now().toISOString() });
+    throw e;
+  }
+}
+
+async function extractAndRoute(ctx: Ctx, billId: string, runId: string): Promise<Bill> {
   let bill = (await ctx.store.get("bills", billId))!;
   const fail = async (action: string, reasoning: string, evidence: Record<string, unknown> = {}) => {
     await trace(ctx, billId, "ap_agent", action, reasoning, evidence);
     bill = await ctx.store.update("bills", billId, { status: "needs_review", insights: [{ kind: "info", text: reasoning }] });
+    await ctx.store.update("extraction_runs", runId, { status: "failed", outcome: "needs_review", error: reasoning, finished_at: ctx.now().toISOString() });
     return bill;
   };
 
@@ -106,15 +139,22 @@ export async function runExtraction(ctx: Ctx, billId: string): Promise<Bill> {
 
   // 1. LLM reads the document
   let result;
+  await trace(ctx, billId, "ap_agent", "Reading document", `Sending ${bill.file_name ?? "the document"} to ${engineLabel(ctx.llm.name)}.`, { engine: ctx.llm.name });
+  await ctx.store.update("extraction_runs", runId, { read_started_at: ctx.now().toISOString() });
   try {
     result = await ctx.llm.extractInvoice({ bytes: file.bytes, mime, name: bill.file_name ?? "invoice" });
   } catch (e) {
+    await ctx.store.update("extraction_runs", runId, { read_finished_at: ctx.now().toISOString() });
     return fail("Extraction failed", `The AP agent could not read the document: ${(e as Error).message}`, { engine: ctx.llm.name });
   }
   const ex = { ...emptyExtraction(), ...result.fields };
   const conf = { ...result.confidence };
   const found = Object.entries(ex).filter(([k, v]) => k !== "line_items" && k !== "suspicious_instructions" && v != null).length;
-  const low = Object.entries(conf).filter(([, c]) => c < 0.8).map(([k]) => k);
+  const low = Object.entries(conf).filter(([k, c]) => c < 0.8 && (ex as unknown as Record<string, unknown>)[k] != null).map(([k]) => k);
+  await ctx.store.update("extraction_runs", runId, {
+    read_finished_at: ctx.now().toISOString(), engine: result.engine, fields_found: found, low_confidence: low,
+    details: { line_items: ex.line_items.length, ...(result.details ? { job_id: result.details.job_id, confidence_source: result.details.confidence_source } : {}) },
+  });
   await trace(ctx, billId, "ap_agent", "Extracted invoice fields", `Read ${found} header fields and ${ex.line_items.length} line item${ex.line_items.length === 1 ? "" : "s"}${low.length ? `; low confidence on ${low.join(", ")}` : ""}.`, { engine: result.engine, fields: ex, confidence: conf, ...(result.details ? { engine_details: result.details } : {}) });
 
   if (ex.suspicious_instructions) {
@@ -383,7 +423,7 @@ export async function resetBill(ctx: Ctx, billId: string, actor: string) {
   await trace(ctx, billId, actor, "Reset bill", "Discarded manual edits and approvals; re-running extraction and validation from the original document.", {});
   for (const a of await ctx.store.list("approvals", { bill_id: billId })) if (a.status === "pending" || a.status === "waiting") await ctx.store.update("approvals", a.id, { status: "cancelled" });
   await ctx.store.update("bills", billId, { status: "received", department: bill.department, paid_at: null });
-  return runExtraction(ctx, billId);
+  return runExtraction(ctx, billId, "reset");
 }
 
 // ------------------------------------------------------------------ vendor follow-up
@@ -554,7 +594,7 @@ export async function processEmail(ctx: Ctx, emailId: string): Promise<Email> {
     }
     const bill = await createBillFromFile(ctx, { bytes: file.bytes, mime: a.mime, name: a.filename, source_email_id: emailId, actor: "intake_agent" });
     billIds.push(bill.id);
-    await runExtraction(ctx, bill.id);
+    await runExtraction(ctx, bill.id, "email");
   }
   if (flags.length) await trace(ctx, null, "intake_agent", "Flagged for a person", flags.join(" "), {}, emailId);
   return ctx.store.update("emails", emailId, { classification, classification_reason: reason, flag: flags.join(" ") || null, processed: true, bill_ids: billIds });

@@ -143,7 +143,7 @@ export function sampleInbox(T: Date) {
 export async function buildDemo(store: Store, today = new Date()): Promise<void> {
   const T = new Date(today);
   let clock = new Date(T);
-  const ctx: Ctx = { store, llm: new SimulatedLLM(), now: () => new Date(clock) };
+  const ctx: Ctx = { store, llm: new SimulatedLLM(), now: () => new Date(clock), runSource: "seed" };
   const at = (days: number, h = 10, m = 0) => {
     const x = addDays(T, days);
     x.setHours(h, m, 0, 0);

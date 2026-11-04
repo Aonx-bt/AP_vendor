@@ -1,11 +1,14 @@
 import { useRef, useState } from "react";
-import { FileUp, Loader2 } from "lucide-react";
+import { ArrowRight, FileUp, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Label, NativeSelect } from "./ui/input";
 import { useData } from "@/lib/data";
 import { useOpenBill } from "./AppShell";
+import { RunProgress, useRunProgress } from "./RunProgress";
+import { StatusChip } from "./bits";
+import type { Bill } from "@shared/types.ts";
 import { DEPARTMENTS } from "@shared/types.ts";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +19,11 @@ export function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const openBill = useOpenBill();
   const [file, setFile] = useState<File | null>(null);
   const [dept, setDept] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<"pick" | "creating" | "running" | "done">("pick");
+  const [billId, setBillId] = useState<string | null>(null);
+  const [result, setResult] = useState<Bill | null>(null);
+  const progress = useRunProgress(billId, phase === "running");
+  const busy = phase === "creating";
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
@@ -35,41 +42,65 @@ export function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
   const submit = async () => {
     if (!file) return;
-    setBusy(true);
+    setPhase("creating");
+    let id: string | null = null;
     try {
-      let opened = false;
-      const bill = await backend.uploadBill(file, dept || null, person, async (id) => {
-        opened = true;
-        await refresh();
-        onOpenChange(false);
-        openBill(id);
-      });
-      await refresh();
-      if (!opened) {
-        onOpenChange(false);
-        openBill(bill.id);
-      }
-      toast.success(bill.invoice_no ? `Read invoice ${bill.invoice_no}` : "Bill created; needs review");
-      setFile(null);
+      const created = await backend.createBill(file, dept || null, person);
+      id = created.id;
+      setBillId(id);
+      setPhase("running");
+      refresh();
+      const bill = await backend.extract(id);
+      setResult(bill);
+      toast.success(bill.invoice_no ? `Read invoice ${bill.invoice_no}` : "Bill created; it needs a review");
     } catch (e) {
       toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
+      if (!id) {
+        setPhase("pick");
+        return;
+      }
     }
+    setPhase("done");
+    await refresh();
+  };
+
+  const again = () => {
+    setPhase("pick");
+    setBillId(null);
+    setResult(null);
+    setFile(null);
+  };
+  const close = (o: boolean) => {
+    onOpenChange(o);
+    if (!o && phase === "done") again();
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
+    <Dialog open={open} onOpenChange={(o) => !busy && close(o)}>
       <DialogContent>
         <DialogTitle>Add bill</DialogTitle>
         <DialogDescription>Upload a vendor invoice. The AP agent reads it, then the validation agent checks it.</DialogDescription>
-        {busy ? (
+        {phase === "running" || phase === "done" ? (
+          <div className="mt-4 space-y-3">
+            <RunProgress traces={progress.traces} runs={progress.runs} fileName={file?.name} live={phase === "running"} />
+            {phase === "running" && <p className="text-xs text-muted-foreground">You can close this window; processing carries on and the bill appears in the list.</p>}
+            {phase === "done" && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm">
+                  {result ? <><span className="font-mono">{result.invoice_no ?? "Bill"}</span><StatusChip bill={result} /></> : <span className="text-muted-foreground">Processing stopped.</span>}
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={again}><RotateCcw /> Upload another</Button>
+                  {billId && <Button onClick={() => { const id = billId; close(false); openBill(id); }}>Open bill <ArrowRight /></Button>}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : busy ? (
           <div className="mt-5 flex flex-col items-center gap-3 rounded-xl bg-emerald-50/60 py-10 text-sm">
             <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
-            <div className="font-medium">Reading invoice…</div>
-            <div className="text-xs text-muted-foreground">Extracting fields, matching vendor, running checks</div>
-          </div>
-        ) : (
+            <div className="font-medium">Uploading…</div>
+          </div>        ) : (
           <div className="mt-4 space-y-4">
             <button
               type="button"
@@ -97,7 +128,7 @@ export function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               </p>
             )}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => close(false)}>Cancel</Button>
               <Button onClick={submit} disabled={!file}>Upload and read</Button>
             </div>
           </div>

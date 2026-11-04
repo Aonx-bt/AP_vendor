@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import type { Bill, BillLine, ApprovalRule, VendorMessage, Email } from "@shared/types.ts";
+import type { Bill, BillLine, ApprovalRule, VendorMessage, Email, ExtractionRun, TraceEvent } from "@shared/types.ts";
 import { MemoryStore, SupabaseStore, emptyDB, type DB, type Store } from "@shared/store.ts";
 import { SimulatedLLM } from "@shared/llm.ts";
 import { buildDemo } from "@shared/seed.ts";
@@ -20,6 +20,12 @@ export interface Backend {
   load(): Promise<{ db: DB; ledger: LedgerRow[] }>;
   fileUrl(path: string): Promise<string | null>;
   uploadBill(file: File, department: string | null, actor: string, onCreated?: (billId: string) => void): Promise<Bill>;
+  /** Save the file as a new bill without reading it yet. */
+  createBill(file: File, department: string | null, actor: string): Promise<Bill>;
+  /** Read the bill's document, check it and route it (one extraction run). */
+  extract(billId: string): Promise<Bill>;
+  /** Everything needed to draw a run's stages: the bill's steps and its runs, newest last. */
+  runProgress(billId: string): Promise<{ traces: TraceEvent[]; runs: ExtractionRun[] }>;
   saveBill(billId: string, patch: Partial<Bill>, lines: Partial<BillLine>[] | null, actor: string): Promise<void>;
   revalidate(billId: string, actor: string): Promise<void>;
   resetBill(billId: string, actor: string): Promise<void>;
@@ -123,6 +129,28 @@ export function createDemoBackend(): Backend {
       await sleep(1400); // simulated reading time so the "Reading invoice…" state is visible
       return run((c) => P.runExtraction(c, bill.id));
     },
+    async createBill(file, department, actor) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      return run((c) => P.createBillFromFile(c, { bytes, mime: file.type || "application/octet-stream", name: file.name, department, actor }));
+    },
+    // demo pace: each step pauses briefly so the live stage view visibly ticks along
+    extract: (id) =>
+      run(async (c) => {
+        await sleep(400);
+        // the demo reader is instant; pause like a real reader would so the stages and timings look realistic
+        const reader = new SimulatedLLM();
+        const llm = Object.assign(Object.create(Object.getPrototypeOf(reader)), reader, {
+          extractInvoice: async (d: Parameters<SimulatedLLM["extractInvoice"]>[0]) => { await sleep(1800 + Math.random() * 1200); return reader.extractInvoice(d); },
+        });
+        return P.runExtraction({ ...c, llm, pace: 250 }, id);
+      }),
+    async runProgress(id) {
+      const s = await ready();
+      return {
+        traces: s.db.trace_events.filter((t) => t.bill_id === id).map((t) => ({ ...t })),
+        runs: s.db.extraction_runs.filter((r) => r.bill_id === id).map((r) => ({ ...r })).sort((a, b) => a.started_at.localeCompare(b.started_at)),
+      };
+    },
     saveBill: (id, patch, lines, actor) => run((c) => P.saveBillEdits(c, id, patch, lines, actor)).then(() => {}),
     revalidate: (id, actor) => run((c) => P.runValidation(c, id, actor)).then(() => {}),
     resetBill: (id, actor) => run((c) => P.resetBill(c, id, actor)).then(() => {}),
@@ -171,13 +199,14 @@ export function createSupabaseBackend(url: string, anon: string): Backend {
     if (data?.error) throw new Error(data.error);
     return data as T;
   };
-  const tables = ["vendors", "purchase_orders", "bills", "bill_lines", "validation_results", "approval_rules", "approvals", "trace_events", "emails", "vendor_messages"] as const;
+  const tables = ["vendors", "purchase_orders", "bills", "bill_lines", "validation_results", "approval_rules", "approvals", "trace_events", "emails", "vendor_messages", "extraction_runs"] as const;
 
   return {
     mode: "supabase",
     async load() {
       const db = emptyDB();
-      const results = await Promise.all(tables.map((t) => store.list(t)));
+      // extraction_runs is newer than the website may be: if the database update hasn't landed yet, show no history
+      const results = await Promise.all(tables.map((t) => (t === "extraction_runs" ? store.list(t).catch(() => []) : store.list(t))));
       tables.forEach((t, i) => ((db as Record<string, unknown[]>)[t] = results[i]));
       const { data: ledger, error } = await sb.from("vendor_ledger").select("*");
       if (error) throw new Error(error.message);
@@ -190,6 +219,20 @@ export function createSupabaseBackend(url: string, anon: string): Backend {
       const data = toBase64(new Uint8Array(await file.arrayBuffer()));
       const r = await fn<{ bill: Bill }>("bill-actions", { op: "upload", data, mime: file.type, name: file.name, department, actor });
       return r.bill;
+    },
+    async createBill(file, department, actor) {
+      const data = toBase64(new Uint8Array(await file.arrayBuffer()));
+      return (await fn<{ bill: Bill }>("bill-actions", { op: "create", data, mime: file.type, name: file.name, department, actor })).bill;
+    },
+    extract: (bill_id) => fn<{ bill: Bill }>("extract-invoice", { bill_id }).then((r) => r.bill),
+    async runProgress(bill_id) {
+      const [t, r] = await Promise.all([
+        sb.from("trace_events").select("*").eq("bill_id", bill_id).order("ts"),
+        sb.from("extraction_runs").select("*").eq("bill_id", bill_id).order("started_at"),
+      ]);
+      if (t.error) throw new Error(t.error.message);
+      // before the database update has been applied, the runs table may not exist yet: show stages without it
+      return { traces: (t.data ?? []) as TraceEvent[], runs: (r.error ? [] : r.data ?? []) as ExtractionRun[] };
     },
     saveBill: (bill_id, patch, lines, actor) => fn("bill-actions", { op: "save", bill_id, patch, lines, actor }).then(() => {}),
     revalidate: (bill_id, actor) => fn("validate-bill", { bill_id, actor }).then(() => {}),

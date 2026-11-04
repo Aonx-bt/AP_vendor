@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, Database, Loader2, Mail, Paperclip, Pencil, Play, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Database, ExternalLink, Loader2, Mail, Paperclip, Pencil, Play, Plus, RefreshCw, Trash2, Unplug, X } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger, CountPill } from "@/components/ui/tabs";
 import { Card, SectionTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { useOpenBill } from "@/components/AppShell";
 import { useData } from "@/lib/data";
 import { cn, timeOf } from "@/lib/utils";
 import { describeCondition } from "@shared/pipeline.ts";
+import type { GmailStatus } from "@shared/gmailAuth.ts";
 import { DEPARTMENTS, PEOPLE, ROLE_LABEL, type ApprovalRule, type Condition, type Email, type Level } from "@shared/types.ts";
 
 export default function Settings() {
@@ -180,7 +181,6 @@ function Mailbox() {
       setBusy(null);
     }
   };
-  const [sync, setSync] = useState<{ connected: boolean; message?: string; recorded?: number; processed?: number; at: string } | null>(null);
   if (!db) return null;
   const emails = [...db.emails].sort((a, b) => b.received_at.localeCompare(a.received_at));
   const inbox = emails.filter((e) => !e.processed);
@@ -204,52 +204,21 @@ function Mailbox() {
   const processAll = async () => {
     for (const e of inbox) await process(e);
   };
-  const doSync = async () => {
-    setBusy("sync");
-    try {
-      const r = await backend.syncGmail();
-      setSync({ ...r, at: new Date().toISOString() });
-      await refresh();
-      if (r.connected) toast.success(`Gmail synced: ${r.recorded ?? 0} new, ${r.processed ?? 0} processed`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  };
 
   return (
     <div className="space-y-6">
-      <Card className="p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-100"><Mail className="h-4 w-4" /></div>
-            <div>
-              <div className="font-medium">Gmail</div>
-              <div className="text-xs text-muted-foreground">
-                {sync ? (sync.connected ? `Connected · last sync ${timeOf(sync.at)}` : sync.message) : backend.mode === "demo" ? "Not connected in demo mode." : "Syncs every minute when GMAIL_* secrets are set. Press Sync now to check."}
-              </div>
-            </div>
-          </div>
-          <Button variant="outline" onClick={doSync} disabled={busy === "sync"}>{busy === "sync" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Sync now</Button>
-        </div>
-        {(backend.mode === "demo" || (sync && !sync.connected)) && (
-          <p className="mt-3 rounded-lg bg-muted/70 px-3 py-2 text-xs text-muted-foreground">
-            Without Gmail credentials, use the Simulated inbox below or upload bills manually. Both feed the same pipeline: classify → extract → validate → route.
-          </p>
-        )}
-      </Card>
+      <GmailCard onSynced={refresh} />
 
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <SectionTitle>Simulated inbox <span className="ml-1 font-normal text-muted-foreground">({inbox.length} unprocessed)</span></SectionTitle>
+          <SectionTitle>{live ? "Waiting to be processed" : "Simulated inbox"} <span className="ml-1 font-normal text-muted-foreground">({inbox.length})</span></SectionTitle>
           {inbox.length > 1 && <Button size="sm" variant="outline" disabled={!!busy} onClick={processAll}><Play /> Process all</Button>}
         </div>
         <Card className="divide-y divide-border">
           {inbox.map((e) => (
             <EmailRow key={e.id} e={e} right={<Button size="sm" disabled={!!busy} onClick={() => process(e)}>{busy === e.id ? <Loader2 className="animate-spin" /> : <Play />} Process</Button>} />
           ))}
-          {!inbox.length && <Empty>Inbox is empty. Reset demo data to bring the sample emails back.</Empty>}
+          {!inbox.length && <Empty>{live ? "Nothing waiting. New Gmail messages are picked up every minute." : "Inbox is empty. Reset demo data to bring the sample emails back."}</Empty>}
         </Card>
       </section>
 
@@ -309,6 +278,120 @@ function Mailbox() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+const ago = (iso: string | null) => {
+  if (!iso) return "not yet";
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  return m < 1 ? "just now" : m === 1 ? "1 min ago" : m < 60 ? `${m} min ago` : timeOf(iso);
+};
+
+/** Gmail connection: not set up → Connect Gmail → Connected as … (Sync now, Disconnect) → or a "connect again" error. */
+function GmailCard({ onSynced }: { onSynced: () => Promise<void> }) {
+  const { backend } = useData();
+  const [params, setParams] = useSearchParams();
+  const [st, setSt] = useState<GmailStatus | null | undefined>(undefined);
+  const [busy, setBusy] = useState<"sync" | "disconnect" | null>(null);
+  const [confirmOff, setConfirmOff] = useState(false);
+  const load = useCallback(() => backend.gmailStatus().then(setSt).catch(() => setSt(null)), [backend]);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  // coming back from Google's permission screen
+  useEffect(() => {
+    const g = params.get("gmail");
+    if (!g) return;
+    if (g === "connected") toast.success("Gmail connected. New emails are checked every minute.");
+    else toast.error(`Gmail not connected: ${params.get("reason") ?? "unknown error"}`);
+    params.delete("gmail");
+    params.delete("reason");
+    setParams(params, { replace: true });
+    load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sync = async () => {
+    setBusy("sync");
+    try {
+      const r = await backend.syncGmail();
+      await Promise.all([onSynced(), load()]);
+      if (r.connected) toast.success(`Checked Gmail: ${r.recorded ?? 0} new email${r.recorded === 1 ? "" : "s"}, ${r.processed ?? 0} processed${r.remaining ? `, ${r.remaining} more next minute` : ""}.`);
+      else toast.warning(r.message ?? "Gmail is not connected.");
+      if (r.errors?.length) toast.error(r.errors[0]);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const disconnect = async () => {
+    setConfirmOff(false);
+    setBusy("disconnect");
+    try {
+      await backend.disconnectGmail();
+      await load();
+      toast.success("Gmail disconnected. AP Desk no longer reads the inbox.");
+    } finally {
+      setBusy(null);
+    }
+  };
+  const connectUrl = backend.gmailConnectUrl();
+
+  let body: React.ReactNode;
+  let action: React.ReactNode = null;
+  if (st === undefined) body = <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Checking…</span>;
+  else if (st === null) body = "Demo mode: no real mailbox. Use the Simulated inbox below or upload bills.";
+  else if (!st.configured) body = <>Not set up yet. Add the Google client ID and secret (see <a className="underline" href="https://github.com/Aonx-bt/AP_vendor/blob/main/SETUP.md#connect-gmail" target="_blank" rel="noreferrer">setup guide</a>), then come back here.</>;
+  else if (st.connected) {
+    body = (
+      <span className="flex flex-wrap items-center gap-x-1.5">
+        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Connected as <span className="font-medium text-slate-800">{st.address ?? "your Gmail"}</span>
+        <span>· checks every minute · last checked {ago(st.last_sync)}</span>
+      </span>
+    );
+    action = (
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={sync} disabled={!!busy}>{busy === "sync" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Check now</Button>
+        <Button variant="ghost" onClick={() => setConfirmOff(true)} disabled={!!busy}><Unplug /> Disconnect</Button>
+      </div>
+    );
+  } else {
+    body = st.error ? <span className="text-amber-800">{st.error}</span> : "Ready to connect. You'll pick the inbox and allow AP Desk to read it and send follow-ups.";
+    action = connectUrl && <Button asChild><a href={connectUrl}><ExternalLink /> {st.error ? "Connect again" : "Connect Gmail"}</a></Button>;
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 gap-3">
+          <div className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg", st?.connected ? "bg-emerald-50 text-emerald-700" : "bg-slate-100")}><Mail className="h-4 w-4" /></div>
+          <div className="min-w-0">
+            <div className="font-medium">Gmail</div>
+            <div className="text-xs text-muted-foreground">{body}</div>
+          </div>
+        </div>
+        {action}
+      </div>
+      {st?.connected && (
+        <p className="mt-3 rounded-lg bg-muted/70 px-3 py-2 text-xs text-muted-foreground">
+          Every email is sorted first. Only invoices are read and turned into bills; credit notes, quotes, statements, auto-replies and newsletters are listed below with the reason. Each bill's progress shows on the Runs page.
+        </p>
+      )}
+      <Dialog open={confirmOff} onOpenChange={setConfirmOff}>
+        <DialogContent>
+          <DialogTitle>Disconnect Gmail?</DialogTitle>
+          <DialogDescription>AP Desk stops reading {st?.address ?? "the inbox"} and vendor emails are simulated instead of sent. Bills already created stay. You can connect again any time.</DialogDescription>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirmOff(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={disconnect}>Disconnect</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }
 

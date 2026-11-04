@@ -75,3 +75,39 @@ From now on the website updates by itself whenever Claude changes it.
 - **No login yet:** anyone with your website address can see what you upload. Use test invoices until a login is added.
 - **Free Supabase projects pause after about a week without use.** Open supabase.com and click **Restore project**; your data is kept.
 - **Rollback:** in Vercel → your project → Deployments → pick an earlier one → **Instant rollback**.
+
+## Connect Gmail
+
+AP Desk checks one Gmail inbox every minute. Every email is sorted first, and only invoices are read: the PDF or photo goes to Sarvam, then the checks and approval routing run. Credit notes, quotes, statements, auto-replies and newsletters are listed in Settings → Mailbox with the reason. The same inbox sends "Request info from vendor" emails, and vendor replies attach to the same bill.
+
+Use a **dedicated inbox**: everything in it is sorted by the app. About 10 minutes, once. Do steps 1–5 **signed in to Google as that inbox**.
+
+1. Go to https://console.cloud.google.com, open the project picker (top left), click **New project**, name it `AP Desk`, then **Create** and select it.
+2. Open ☰ → **APIs & Services → Library**, search **Gmail API**, then click **Enable**.
+3. Open ☰ → **APIs & Services → OAuth consent screen** (also called **Google Auth Platform**) and click **Get started**:
+   - App name `AP Desk`; user support email: the inbox.
+   - **Audience: External**. (Choose **Internal** instead if the inbox is a Google Workspace address.)
+   - Contact email: the inbox. Agree, then **Create**.
+4. Go to **Audience** → **Publish app** → **Confirm**. Left in "Testing", Google cuts the connection every 7 days. Google's verification isn't needed for your own inbox.
+5. Go to **Clients** → **Create client**:
+   - Application type: **Web application**; name `AP Desk`.
+   - **Authorized redirect URIs** → **Add URI**: `https://ulwaqfiyxkfmpqjauxgx.supabase.co/functions/v1/gmail-oauth`
+   - Click **Create**, then copy the **Client ID** and **Client secret**.
+6. On GitHub, open https://github.com/Aonx-bt/AP_vendor/settings/secrets/actions and add three secrets:
+
+   | Name | Value |
+   |---|---|
+   | `GMAIL_CLIENT_ID` | the Client ID |
+   | `GMAIL_CLIENT_SECRET` | the Client secret |
+   | `APP_URL` | `https://ap-vendor.vercel.app` |
+
+7. Go to https://github.com/Aonx-bt/AP_vendor/actions → **Deploy backend** → **Run workflow**, and wait for the green tick.
+8. On your website, open **Settings → Mailbox → Connect Gmail**:
+   - pick the inbox;
+   - Google says "Google hasn't verified this app": click **Advanced → Go to AP Desk (unsafe)**. It's your own app;
+   - tick the permission and click **Continue**.
+
+   You're sent back to AP Desk, which shows **Connected as …@gmail.com**.
+9. **Test it.** From another email account, send an invoice PDF to the inbox. Within about 1–2 minutes it appears under **Bills**, with its stages on **Runs**. Click **Check now** to check immediately.
+
+**If it stops working:** Google drops the connection if the inbox password changes or access is removed. Mailbox then shows a message and a **Connect again** button. Attachments over 25 MB arrive as Drive links, and those emails are flagged for a person.

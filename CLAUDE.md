@@ -23,6 +23,15 @@ Node needs to use this workspace's network proxy). Read each PDF yourself, compa
 field by field, and tell the owner plainly what Sarvam got right or wrong. Never print or commit the key.
 Then Part B (live site + Gmail).
 
+## Gmail
+- "Connect Gmail" = `supabase/functions/gmail-oauth` (Google consent → refresh token stored in the server-only
+  `app_secrets` table → switches on the every-minute pg_cron job via `ap_set_project_url`).
+- `sync-gmail` runs `_shared/gmailSync.ts` (records new mail, processes ≤3 per run). Sign-in/token logic is
+  `_shared/gmailAuth.ts`; Gmail HTTP is `_shared/gmail.ts`. Owner setup steps: SETUP.md → "Connect Gmail".
+- Live project: https://ulwaqfiyxkfmpqjauxgx.supabase.co, site https://ap-vendor.vercel.app. You can check
+  state read-only with the public key from the live JS bundle (REST) and `POST /functions/v1/gmail-oauth`
+  `{"op":"status"}`; GitHub Actions run logs are readable via the public GitHub API.
+
 ## AI engines
 - Invoices: Sarvam Vision if `SARVAM_API_KEY` is set (`_shared/sarvam.ts`), else Claude (`LLM_API_KEY`).
 - Email sorting and vendor-email drafts: Claude if `LLM_API_KEY` is set, else simulated.

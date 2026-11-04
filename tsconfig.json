@@ -17,5 +17,5 @@
     "types": ["vite/client"]
   },
   "include": ["src", "supabase/functions/_shared", "scripts"],
-  "exclude": ["supabase/functions/_shared/anthropic.ts", "supabase/functions/_shared/gmail.ts", "supabase/functions/_shared/deno.ts"]
+  "exclude": ["supabase/functions/_shared/anthropic.ts", "supabase/functions/_shared/deno.ts"]
 }

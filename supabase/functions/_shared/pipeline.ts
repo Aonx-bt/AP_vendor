@@ -10,7 +10,8 @@ import { CHECK_LABELS, FIELD_LABEL, missingRequired, rcmCandidate, runChecks, TD
 import { addDays, daysBetween, domainOf, inr, isoDate, nameSimilarity, num, round2, sha256Hex } from "./util.ts";
 
 export interface Mailer {
-  connected: boolean;
+  /** True when a real mailbox can send (Gmail connected). Otherwise sends are simulated. */
+  isConnected(): Promise<boolean>;
   send(m: { to: string; subject: string; body: string; inReplyTo?: string | null; threadId?: string | null }): Promise<{ rfc_message_id: string; thread_id: string | null }>;
 }
 
@@ -493,7 +494,7 @@ export async function sendVendorMessage(ctx: Ctx, messageId: string, edits: { to
   const bill = (await ctx.store.get("bills", msg.bill_id))!;
   const email = bill.source_email_id ? await ctx.store.get("emails", bill.source_email_id) : null;
   let simulated = true, rfc: string | null = `<apdesk-${msg.id}@${COMPANY.domain}>`, thread: string | null = msg.thread_id;
-  if (ctx.mailer?.connected) {
+  if (ctx.mailer && (await ctx.mailer.isConnected())) {
     const r = await ctx.mailer.send({ to: edits.to_address, subject: edits.subject, body: edits.body, inReplyTo: email?.message_id ?? null, threadId: email?.thread_id ?? null });
     simulated = false;
     rfc = r.rfc_message_id;

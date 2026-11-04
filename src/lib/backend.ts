@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Bill, BillLine, ApprovalRule, VendorMessage, Email, ExtractionRun, TraceEvent } from "@shared/types.ts";
+import type { GmailStatus } from "@shared/gmailAuth.ts";
 import { MemoryStore, SupabaseStore, emptyDB, type DB, type Store } from "@shared/store.ts";
 import { SimulatedLLM } from "@shared/llm.ts";
 import { buildDemo } from "@shared/seed.ts";
@@ -37,7 +38,12 @@ export interface Backend {
   sendVendorEmail(messageId: string, edits: { to_address: string; subject: string; body: string }, actor: string): Promise<{ simulated: boolean }>;
   markVendorReply(billId: string, actor: string): Promise<void>;
   processEmail(emailId: string): Promise<Email>;
-  syncGmail(): Promise<{ connected: boolean; recorded?: number; processed?: number; message?: string; errors?: string[] }>;
+  syncGmail(): Promise<{ connected: boolean; recorded?: number; processed?: number; remaining?: number; message?: string; reason?: string; errors?: string[] }>;
+  /** null in demo mode (no real mailbox). */
+  gmailStatus(): Promise<GmailStatus | null>;
+  /** Full-page link that starts Google's permission screen; null in demo mode. */
+  gmailConnectUrl(): string | null;
+  disconnectGmail(): Promise<void>;
   saveRule(rule: Partial<ApprovalRule>): Promise<void>;
   deleteRule(id: string): Promise<void>;
   resetDemo(): Promise<void>;
@@ -165,6 +171,9 @@ export function createDemoBackend(): Backend {
     async syncGmail() {
       return { connected: false, message: "Demo mode: Gmail is not connected. Use the Simulated inbox." };
     },
+    gmailStatus: async () => null,
+    gmailConnectUrl: () => null,
+    disconnectGmail: async () => {},
     saveRule: (rule) =>
       run(async (c) => {
         if (rule.id) await c.store.update("approval_rules", rule.id, rule);
@@ -246,6 +255,9 @@ export function createSupabaseBackend(url: string, anon: string): Backend {
     markVendorReply: (bill_id, actor) => fn("vendor-followup", { op: "reply", bill_id, actor }).then(() => {}),
     processEmail: (email_id) => fn<{ email: Email }>("process-email", { email_id }).then((r) => r.email),
     syncGmail: () => fn("sync-gmail", {}),
+    gmailStatus: () => fn<GmailStatus>("gmail-oauth", { op: "status" }),
+    gmailConnectUrl: () => `${url}/functions/v1/gmail-oauth?op=start`,
+    disconnectGmail: () => fn("gmail-oauth", { op: "disconnect" }).then(() => {}),
     async saveRule(rule) {
       if (rule.id) await store.update("approval_rules", rule.id, rule);
       else await store.insert("approval_rules", rule);

@@ -5,18 +5,27 @@ import Bills from "./pages/Bills";
 import Vendors from "./pages/Vendors";
 import Runs from "./pages/Runs";
 import Settings from "./pages/Settings";
+import Privacy from "./pages/Privacy";
 
 export default function App() {
   return (
-    <AppShell>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/bills" element={<Bills />} />
-        <Route path="/runs" element={<Runs />} />
-        <Route path="/vendors" element={<Vendors />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AppShell>
+    <Routes>
+      <Route path="/privacy" element={<Privacy />} />
+      <Route
+        path="*"
+        element={
+          <AppShell>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/bills" element={<Bills />} />
+              <Route path="/runs" element={<Runs />} />
+              <Route path="/vendors" element={<Vendors />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </AppShell>
+        }
+      />
+    </Routes>
   );
 }

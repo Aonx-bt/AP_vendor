@@ -61,7 +61,7 @@ jobs:
         run: |
           args=()
           for name in SARVAM_API_KEY LLM_API_KEY GMAIL_CLIENT_ID GMAIL_CLIENT_SECRET APP_URL; do
-            value="${!name}"
+            value="$(printf '%s' "${!name}" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
             [ -n "$value" ] && args+=("$name=$value")
           done
           if [ ${#args[@]} -gt 0 ]; then

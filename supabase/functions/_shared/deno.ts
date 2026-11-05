@@ -21,17 +21,19 @@ export type ServerCtx = Ctx & { llmConfigured: boolean; secrets: SecretStore; gm
 export function makeCtx(): ServerCtx {
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   const secrets = supabaseSecretStore(sb);
+  // keys pasted into settings pages often carry a stray space or line break; Google rejects them, so trim
+  const env = (k: string) => Deno.env.get(k)?.trim() || undefined;
   const gmailAuth = new GmailAuth({
-    clientId: Deno.env.get("GMAIL_CLIENT_ID"), clientSecret: Deno.env.get("GMAIL_CLIENT_SECRET"),
-    envRefreshToken: Deno.env.get("GMAIL_REFRESH_TOKEN"), secrets,
+    clientId: env("GMAIL_CLIENT_ID"), clientSecret: env("GMAIL_CLIENT_SECRET"),
+    envRefreshToken: env("GMAIL_REFRESH_TOKEN"), secrets,
   });
   const gmail = createGmail(gmailAuth);
   // Invoices: Sarvam Vision if SARVAM_API_KEY is set, else Claude. Email triage and drafting: Claude if
   // LLM_API_KEY is set. Anything without a key falls back to the simulated engine.
-  const key = Deno.env.get("LLM_API_KEY");
-  const sarvamKey = Deno.env.get("SARVAM_API_KEY");
+  const key = env("LLM_API_KEY");
+  const sarvamKey = env("SARVAM_API_KEY");
   const general: LLM = key ? new AnthropicLLM(key) : new SimulatedLLM();
-  const llm: LLM = sarvamKey ? new CompositeLLM(new SarvamExtractor({ apiKey: sarvamKey, model: Deno.env.get("SARVAM_EXTRACT_MODEL") || undefined }), general) : general;
+  const llm: LLM = sarvamKey ? new CompositeLLM(new SarvamExtractor({ apiKey: sarvamKey, model: env("SARVAM_EXTRACT_MODEL") }), general) : general;
   return { store: new SupabaseStore(sb), llm, now: () => new Date(), mailer: gmail.mailer, llmConfigured: Boolean(key || sarvamKey), secrets, gmailAuth, gmail: gmail.reader };
 }
 

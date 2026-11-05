@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   // Supabase serves functions at <project>/functions/v1/<name>; this exact address is the redirect URI in Google Cloud
   const redirectUri = `${Deno.env.get("SUPABASE_URL")}/functions/v1/gmail-oauth`;
-  const appUrl = (Deno.env.get("APP_URL") ?? "").replace(/\/+$/, "");
+  const appUrl = (Deno.env.get("APP_URL") ?? "").trim().replace(/\/+$/, "");
   const back = (q: Record<string, string>) => (appUrl ? redirect(`${appUrl}/settings?${new URLSearchParams({ tab: "mailbox", ...q })}`) : null);
 
   try {

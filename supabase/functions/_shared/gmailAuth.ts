@@ -111,6 +111,20 @@ export class GmailAuth {
     return this.cached.token;
   }
 
+  /** Save the inbox address if we don't have it yet (e.g. the first lookup failed). */
+  async ensureAddress(): Promise<string | null> {
+    const have = await this.o.secrets.get(K.address);
+    if (have) return have;
+    try {
+      const p = await this.f("https://gmail.googleapis.com/gmail/v1/users/me/profile", { headers: { Authorization: `Bearer ${await this.accessToken()}` } });
+      const address = p.ok ? ((await p.json()).emailAddress ?? null) : null;
+      if (address) await this.o.secrets.set(K.address, address);
+      return address;
+    } catch {
+      return null;
+    }
+  }
+
   async disconnect() {
     this.cached = null;
     await this.o.secrets.del(K.token, K.address, K.error);

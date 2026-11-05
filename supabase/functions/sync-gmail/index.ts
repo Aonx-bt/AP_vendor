@@ -9,6 +9,7 @@ serve(async (_body, ctx) => {
   if (!st.configured) return { connected: false, reason: "not_configured", message: "Gmail is not set up yet (Google client ID and secret missing)." };
   if (!st.connected) return { connected: false, reason: st.error ? "revoked" : "not_connected", message: st.error ?? "Click Connect Gmail in Settings → Mailbox." };
   try {
+    if (!st.address) await ctx.gmailAuth.ensureAddress();
     return await syncGmailOnce(ctx, ctx.gmail, ctx.secrets, { query: Deno.env.get("GMAIL_QUERY") || undefined, maxProcess: 3 });
   } catch (e) {
     const msg = (e as Error).message;

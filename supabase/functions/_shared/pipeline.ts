@@ -585,7 +585,10 @@ export async function processEmail(ctx: Ctx, emailId: string): Promise<Email> {
   for (const a of supported) {
     const dupe = existing.find((b) => b.file_hash === a.hash);
     if (dupe) {
-      flags.push(`${a.filename} was already processed as bill ${dupe.invoice_no ?? dupe.id.slice(0, 8)}.`);
+      // same file already a bill: link the email to it instead of creating a duplicate
+      flags.push(`${a.filename} is already bill ${dupe.invoice_no ?? dupe.id.slice(0, 8)}, so no second copy was created.`);
+      if (!billIds.includes(dupe.id)) billIds.push(dupe.id);
+      await trace(ctx, dupe.id, "intake_agent", "Same invoice received again", `${a.filename} arrived again by email from ${email.from_address} ("${email.subject}"). Linked to this bill; no duplicate created.`, { email_id: emailId });
       continue;
     }
     const file = await ctx.store.getFile(a.path!);

@@ -85,3 +85,26 @@ describe("inbox checker", () => {
     expect(r3).toMatchObject({ recorded: 0, processed: 0 });
   });
 });
+
+describe("same invoice twice", () => {
+  it("links an emailed copy of an existing bill instead of creating a duplicate", async () => {
+    const store = new MemoryStore();
+    await buildDemo(store, new Date());
+    const ctx: Ctx = { store, llm: new SimulatedLLM(), now: () => new Date() };
+    const { createBillFromFile, runExtraction, processEmail, recordEmail } = await import("./pipeline.ts");
+    const bytes = renderInvoicePdf({
+      vendor: { name: "Sahyadri Packaging Industries", address: "Pune", gstin: "27ABDFS3147K1ZY", pan: "ABDFS3147K" },
+      buyer: { name: "Kaveri Polymers Pvt Ltd", address: "Pune", gstin: "27AAHCK4821M1Z7" },
+      invoice_no: "SPI/DUP/1", invoice_date: new Date().toISOString().slice(0, 10), payment_terms: "Net 30",
+      cgst: 90, sgst: 90, lines: [{ description: "Boxes", hsn_sac: "48191010", qty: 1, rate: 1000, gst_pct: 18 }],
+    });
+    const uploaded = await createBillFromFile(ctx, { bytes, mime: "application/pdf", name: "spi.pdf" });
+    await runExtraction(ctx, uploaded.id);
+    const e = await recordEmail(ctx, { message_id: "<dup@x>", source: "gmail", from_address: "a@b.in", subject: "Invoice SPI/DUP/1", body_text: "", received_at: new Date().toISOString(), attachments: [{ filename: "spi.pdf", mime: "application/pdf", bytes }] });
+    const out = await processEmail(ctx, e!.id);
+    expect(out.bill_ids).toEqual([uploaded.id]);
+    expect(store.db.bills.filter((b) => b.invoice_no === "SPI/DUP/1")).toHaveLength(1);
+    expect(store.db.trace_events.some((t) => t.bill_id === uploaded.id && t.action === "Same invoice received again")).toBe(true);
+  });
+});
+
